@@ -35,6 +35,16 @@ app.get('/api/health', (_req, res) => {
   res.json({ data: { status: 'ok', time: new Date().toISOString() } })
 })
 
+app.get('/', (_req, res) => {
+  res.json({
+    data: {
+      status: 'ok',
+      message: 'Maithili Estates API',
+      health: '/api/health',
+    },
+  })
+})
+
 app.use('/api/auth', authRoutes)
 app.use('/api/properties', propertyRoutes)
 app.use('/api/agents', agentRoutes)

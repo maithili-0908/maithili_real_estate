@@ -2,7 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import heroImg from './assets/hero.png'
 import './App.css'
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5001'
+const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:5001').replace(
+  /\/+$/,
+  '',
+)
 
 const fallbackGallery = [
   'https://images.unsplash.com/photo-1502005229762-cf1b2da7c5d6?auto=format&fit=crop&w=600&q=80',
