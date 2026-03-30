@@ -53,3 +53,19 @@ VITE_API_URL=http://localhost:5001
 ## Notes
 - The frontend falls back to seeded listings if the backend is unavailable.
 - MongoDB must be running locally for the backend to start.
+
+## Render Troubleshooting
+- If Render logs show `MongoServerError: bad auth : authentication failed` (code `8000`), your `MONGODB_URI` credentials are invalid.
+- In MongoDB Atlas, reset or recreate the database user password, then update Render environment variable `MONGODB_URI`.
+- URL-encode special password characters before placing them in URI (`@`, `:`, `/`, `?`, `#`, `%`).
+- Ensure Atlas Network Access allows Render egress IPs (or temporarily `0.0.0.0/0` while testing).
+- After backend starts, run the seed once against the same DB if login users are missing:
+  ```bash
+  cd server
+  npm run seed
+  ```
+
+Correct format example (do not wrap actual password in `<` `>`):
+```txt
+mongodb+srv://<username>:<password>@<cluster-host>/<database>?retryWrites=true&w=majority&appName=Cluster0
+```
