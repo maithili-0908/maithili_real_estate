@@ -961,6 +961,11 @@ function App() {
     }
   }
 
+  const handleAuthShortcut = (event, sectionId) => {
+    event.preventDefault()
+    scrollToSection(sectionId)
+  }
+
   const handleContactAgent = (property) => {
     const propertyAgentId =
       property.agentId ||
@@ -1052,10 +1057,20 @@ function App() {
               </>
             ) : (
               <>
-                <a className="btn-ghost" href="#access">
+                <a
+                  className="btn-ghost"
+                  href="#access-login"
+                  onClick={(event) => handleAuthShortcut(event, 'access-login')}
+                >
                   Sign in
                 </a>
-                <a className="btn-primary" href="#access">
+                <a
+                  className="btn-primary"
+                  href="#access-register"
+                  onClick={(event) =>
+                    handleAuthShortcut(event, 'access-register')
+                  }
+                >
                   Create account
                 </a>
               </>
@@ -2087,7 +2102,11 @@ function App() {
               </div>
             )}
             <div className="grid gap-6 md:grid-cols-2">
-              <form className="card space-y-3" onSubmit={handleLoginSubmit}>
+              <form
+                className="card space-y-3"
+                id="access-login"
+                onSubmit={handleLoginSubmit}
+              >
                 <p className="text-sm font-semibold text-ink">Login</p>
                 <input
                   className="input"
@@ -2115,7 +2134,11 @@ function App() {
                   <p className="text-sm text-ink/60">{notices.login}</p>
                 )}
               </form>
-              <form className="card space-y-3" onSubmit={handleRegisterSubmit}>
+              <form
+                className="card space-y-3"
+                id="access-register"
+                onSubmit={handleRegisterSubmit}
+              >
                 <p className="text-sm font-semibold text-ink">Register</p>
                 <input
                   className="input"
