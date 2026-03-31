@@ -1510,15 +1510,7 @@ function App() {
           </div>
           <div className="agent-grid grid gap-6 md:grid-cols-2">
             {agents.map((agent) => (
-              <div
-                key={agent.id}
-                className="agent-card card grid gap-6 md:grid-cols-[1fr_1.2fr]"
-              >
-                <img
-                  className="h-40 w-full rounded-2xl object-cover md:h-full"
-                  src={agent.avatar}
-                  alt={agent.name}
-                />
+              <div key={agent.id} className="card space-y-3">
                 <div className="space-y-3">
                   <div>
                     <p className="text-xl font-semibold">{agent.name}</p>
