@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import heroImg from './assets/hero.png'
 import './App.css'
 
@@ -306,14 +306,6 @@ const initialAgents = [
   },
 ]
 
-const priceRanges = [
-  { label: 'Any budget', value: 'any' },
-  { label: 'Under ₹1 Cr', value: '0-10000000' },
-  { label: '₹1 Cr - ₹2 Cr', value: '10000000-20000000' },
-  { label: '₹2 Cr - ₹3.5 Cr', value: '20000000-35000000' },
-  { label: '₹3.5 Cr+', value: '35000000-100000000' },
-]
-
 const sortOptions = [
   { label: 'Recommended', value: 'recommended' },
   { label: 'Price: Low to High', value: 'price-asc' },
@@ -377,11 +369,8 @@ function App() {
   const [editingProperty, setEditingProperty] = useState(null)
   const [propertyFormKey, setPropertyFormKey] = useState('new')
   const [filters, setFilters] = useState({
-    search: '',
     location: 'All locations',
-    type: 'All types',
     beds: 'Any',
-    price: 'any',
     sort: 'recommended',
   })
   const [compareIds, setCompareIds] = useState([])
@@ -389,6 +378,12 @@ function App() {
   const [inquiryPropertyId, setInquiryPropertyId] = useState(
     initialProperties[0].id,
   )
+  const listingMainRef = useRef(null)
+  const [messageDraft, setMessageDraft] = useState(() => ({
+    agentId: initialAgents[0]?.id || initialAgents[0]?._id || '',
+    subject: '',
+    message: '',
+  }))
 
   const isAuthenticated = Boolean(auth?.token)
   const role = auth?.user?.role
@@ -489,6 +484,17 @@ function App() {
       setInquiryPropertyId(properties[0].id)
     }
   }, [properties, activeId, inquiryPropertyId])
+
+  useEffect(() => {
+    if (!agents.length) return
+    const availableAgentIds = agents
+      .map((agent) => String(agent.id || agent._id || ''))
+      .filter(Boolean)
+    if (!availableAgentIds.length) return
+    if (!availableAgentIds.includes(String(messageDraft.agentId || ''))) {
+      setMessageDraft((prev) => ({ ...prev, agentId: availableAgentIds[0] }))
+    }
+  }, [agents, messageDraft.agentId])
 
   const setNotice = (key, message) => {
     setNotices((prev) => ({ ...prev, [key]: message }))
@@ -616,6 +622,11 @@ function App() {
     try {
       await postJson('/api/messages', payload)
       setNotice('message', 'Message delivered to the agent.')
+      setMessageDraft((prev) => ({
+        ...prev,
+        subject: '',
+        message: '',
+      }))
       resetForm(form)
     } catch (error) {
       setNotice('message', error.message)
@@ -815,22 +826,7 @@ function App() {
     return ['All locations', ...unique]
   }, [properties])
 
-  const types = useMemo(() => {
-    const unique = Array.from(new Set(properties.map((item) => item.type)))
-    return ['All types', ...unique]
-  }, [properties])
-
   const filteredProperties = useMemo(() => {
-    const matchesSearch = (property) =>
-      property.title.toLowerCase().includes(filters.search.toLowerCase()) ||
-      property.location.toLowerCase().includes(filters.search.toLowerCase())
-
-    const matchesPrice = (property) => {
-      if (filters.price === 'any') return true
-      const [min, max] = filters.price.split('-').map(Number)
-      return property.price >= min && property.price <= max
-    }
-
     const matchesBeds = (property) => {
       if (filters.beds === 'Any') return true
       if (filters.beds === '4+') return property.beds >= 4
@@ -840,12 +836,9 @@ function App() {
     const results = properties
       .filter((property) =>
         [
-          matchesSearch(property),
           filters.location === 'All locations' ||
             property.location === filters.location,
-          filters.type === 'All types' || property.type === filters.type,
           matchesBeds(property),
-          matchesPrice(property),
         ].every(Boolean),
       )
       .sort((a, b) => {
@@ -858,12 +851,82 @@ function App() {
     return results
   }, [filters, properties])
 
+  useEffect(() => {
+    if (!filteredProperties.length) return
+    const hasActiveInFiltered = filteredProperties.some(
+      (property) => String(property.id) === String(activeId),
+    )
+    if (!hasActiveInFiltered) {
+      setActiveId(filteredProperties[0].id)
+    }
+  }, [filteredProperties, activeId])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const listingRoot = listingMainRef.current
+    if (!listingRoot) return
+
+    const syncActiveFromScroll = () => {
+      const listingCards = Array.from(
+        listingRoot.querySelectorAll('[data-property-card-id]'),
+      )
+      if (!listingCards.length) return
+
+      const viewportHeight =
+        window.innerHeight || document.documentElement.clientHeight
+      const focusLine = viewportHeight * 0.35
+      let nextId = ''
+      let closestDistance = Number.POSITIVE_INFINITY
+
+      listingCards.forEach((card) => {
+        const rect = card.getBoundingClientRect()
+        if (rect.bottom <= 0 || rect.top >= viewportHeight) return
+
+        const cardCenterY = rect.top + rect.height / 2
+        const distance = Math.abs(cardCenterY - focusLine)
+        if (distance < closestDistance) {
+          closestDistance = distance
+          nextId = card.getAttribute('data-property-card-id') || ''
+        }
+      })
+
+      if (!nextId) return
+
+      const nextProperty = filteredProperties.find(
+        (property) => String(property.id) === String(nextId),
+      )
+      if (!nextProperty) return
+
+      setActiveId((prev) =>
+        String(prev) === String(nextProperty.id) ? prev : nextProperty.id,
+      )
+    }
+
+    let frameId = 0
+    const handleViewportChange = () => {
+      if (frameId) return
+      frameId = window.requestAnimationFrame(() => {
+        frameId = 0
+        syncActiveFromScroll()
+      })
+    }
+
+    handleViewportChange()
+    window.addEventListener('scroll', handleViewportChange, { passive: true })
+    window.addEventListener('resize', handleViewportChange)
+
+    return () => {
+      if (frameId) window.cancelAnimationFrame(frameId)
+      window.removeEventListener('scroll', handleViewportChange)
+      window.removeEventListener('resize', handleViewportChange)
+    }
+  }, [filteredProperties])
+
   const compareList = properties.filter((property) =>
     compareIds.includes(property.id),
   )
 
   const activeProperty = properties.find((property) => property.id === activeId)
-  const heroProperty = properties[0] || initialProperties[0]
   const agentId =
     agentProfile?.id || agentProfile?._id || auth?.user?.agentId
   const agentProperties = agentId
@@ -888,6 +951,56 @@ function App() {
       if (prev.length >= 3) return prev
       return [...prev, id]
     })
+  }
+
+  const scrollToSection = (sectionId) => {
+    if (typeof document === 'undefined') return
+    const section = document.getElementById(sectionId)
+    if (section) {
+      section.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }
+
+  const handleContactAgent = (property) => {
+    const propertyAgentId =
+      property.agentId ||
+      property.agent?.id ||
+      property.agent?._id ||
+      (typeof property.agent === 'string' || typeof property.agent === 'number'
+        ? property.agent
+        : '')
+    const propertyAgent = getAgent(propertyAgentId)
+    const nextAgentId =
+      propertyAgent?.id || propertyAgent?._id || propertyAgentId || ''
+
+    setActiveId(property.id)
+    setInquiryPropertyId(property.id)
+    setNotice('message', '')
+    setMessageDraft((prev) => ({
+      ...prev,
+      agentId: String(nextAgentId || prev.agentId || ''),
+      subject: `Inquiry about ${property.title}`,
+      message:
+        `Hi, I am interested in ${property.title} in ${property.location}. ` +
+        'Please share more details and available viewing slots.',
+    }))
+    scrollToSection('client-messaging')
+  }
+
+  const handleMessageAgent = (agent) => {
+    const selectedAgentId = agent?.id || agent?._id || ''
+    if (!selectedAgentId) return
+
+    setNotice('message', '')
+    setMessageDraft((prev) => ({
+      ...prev,
+      agentId: String(selectedAgentId),
+      subject: `Consultation request for ${agent.name}`,
+      message:
+        `Hi ${agent.name}, I would like to discuss available listings in Chennai. ` +
+        'Please share suitable options and next steps.',
+    }))
+    scrollToSection('client-messaging')
   }
 
   return (
@@ -950,7 +1063,7 @@ function App() {
           </div>
         </header>
 
-        <section className="hero container hero-grid relative z-10 mx-auto grid w-full max-w-6xl gap-10 px-6 pb-20 pt-2 lg:grid-cols-[1.1fr_0.9fr] animate-fade-up">
+        <section className="hero container relative z-10 mx-auto grid w-full max-w-6xl gap-10 px-6 pb-20 pt-2 animate-fade-up">
           <div className="hero-content space-y-8">
             <div className="hero-badge inline-flex items-center gap-3 rounded-full border border-ink/10 bg-white/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-ink/70">
               <span className="h-2 w-2 rounded-full bg-ocean" />
@@ -965,65 +1078,6 @@ function App() {
                 viewings with agents who know Chennai inside out.
               </p>
             </div>
-            <div className="hero-filters grid gap-4 sm:grid-cols-[1.4fr_1fr_1fr]">
-              <label className="card flex flex-col gap-3">
-                <span className="label">Quick search</span>
-                <input
-                  className="input"
-                  placeholder="Locality, landmark, or RERA"
-                  value={filters.search}
-                  onChange={(event) =>
-                    setFilters((prev) => ({
-                      ...prev,
-                      search: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-              <label className="card flex flex-col gap-3">
-                <span className="label">Property type</span>
-                <select
-                  className="input"
-                  value={filters.type}
-                  onChange={(event) =>
-                    setFilters((prev) => ({
-                      ...prev,
-                      type: event.target.value,
-                    }))
-                  }
-                >
-                  {types.map((type) => (
-                    <option key={type} value={type}>
-                      {type}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="card flex flex-col gap-3">
-                <span className="label">Budget</span>
-                <select
-                  className="input"
-                  value={filters.price}
-                  onChange={(event) =>
-                    setFilters((prev) => ({
-                      ...prev,
-                      price: event.target.value,
-                    }))
-                  }
-                >
-                  {priceRanges.map((range) => (
-                    <option key={range.value} value={range.value}>
-                      {range.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            <div className="hero-actions flex flex-wrap items-center gap-3">
-              <button className="btn-primary">Start matching</button>
-              <button className="btn-outline">Request a Chennai tour</button>
-              <span className="pill">Local concierge</span>
-            </div>
             <div className="stats-grid grid gap-4 sm:grid-cols-3">
               {[
                 { label: 'Active Chennai listings', value: '680+' },
@@ -1035,53 +1089,6 @@ function App() {
                   <p className="text-2xl font-semibold">{stat.value}</p>
                 </div>
               ))}
-            </div>
-          </div>
-
-          <div className="hero-card relative">
-            <div className="absolute -right-6 top-6 h-40 w-40 rounded-full bg-[radial-gradient(circle,#0f766e22_0%,transparent_70%)]" />
-            <div className="absolute -bottom-10 left-10 h-48 w-48 rounded-full bg-[radial-gradient(circle,#d9770630_0%,transparent_70%)]" />
-            <div className="glass relative overflow-hidden p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="label">Featured listing</p>
-                  <p className="text-lg font-semibold">{heroProperty.title}</p>
-                  <p className="text-sm text-ink/60">
-                    {heroProperty.location}
-                  </p>
-                </div>
-                <span className="pill">{heroProperty.status}</span>
-              </div>
-              <div className="mt-6 overflow-hidden rounded-2xl">
-                <img
-                  className="h-64 w-full object-cover"
-                  src={heroImg}
-                  alt="Stylish real estate interior"
-                />
-              </div>
-              <div className="mt-6 grid grid-cols-3 gap-4 text-sm text-ink/70">
-                <div>
-                  <p className="font-semibold text-ink">
-                    {formatCurrency(heroProperty.price)}
-                  </p>
-                  <p>Asking price</p>
-                </div>
-                <div>
-                  <p className="font-semibold text-ink">{heroProperty.beds}</p>
-                  <p>Bedrooms</p>
-                </div>
-                <div>
-                  <p className="font-semibold text-ink">{heroProperty.sqft}</p>
-                  <p>Sq. Ft.</p>
-                </div>
-              </div>
-              <div className="mt-6 flex flex-wrap gap-3">
-                {(heroProperty.tags || []).map((tag) => (
-                  <span key={tag} className="pill">
-                    {tag}
-                  </span>
-                ))}
-              </div>
             </div>
           </div>
         </section>
@@ -1167,13 +1174,14 @@ function App() {
           </div>
 
           <div className="listing-layout grid gap-8 lg:grid-cols-[1.7fr_1fr]">
-            <div className="listing-main space-y-6">
+            <div ref={listingMainRef} className="listing-main space-y-6">
               {filteredProperties.map((property) => {
                 const agent = getAgent(
                   property.agentId || property.agent?.id || property.agent,
                 )
                 return (
                   <article
+                    data-property-card-id={property.id}
                     key={property.id}
                     className={`property-card card transition hover:-translate-y-1 hover:shadow-lift ${
                       property.id === activeId
@@ -1239,8 +1247,13 @@ function App() {
                           ))}
                         </div>
                         <div className="flex flex-wrap items-center gap-3">
-                          <button className="btn-primary">View details</button>
-                          <button className="btn-outline">Contact agent</button>
+                          <button
+                            className="btn-outline"
+                            onClick={() => handleContactAgent(property)}
+                            type="button"
+                          >
+                            Contact agent
+                          </button>
                           <label className="flex items-center gap-2 text-sm text-ink/60">
                             <input
                               type="checkbox"
@@ -1469,7 +1482,6 @@ function App() {
                   a private tour to access off-market listings.
                 </p>
               </div>
-              <button className="btn-primary">Generate PDF comparison</button>
             </div>
           </div>
         </section>
@@ -1507,15 +1519,23 @@ function App() {
                     <p>{agent.email}</p>
                   </div>
                   <div className="flex flex-wrap gap-3">
-                    <button className="btn-primary">View profile</button>
-                    <button className="btn-outline">Message agent</button>
+                    <button
+                      className="btn-outline"
+                      onClick={() => handleMessageAgent(agent)}
+                      type="button"
+                    >
+                      Message agent
+                    </button>
                   </div>
                 </div>
               </div>
             ))}
           </div>
         </section>
-        <section className="form-layout section grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
+        <section
+          id="contact"
+          className="section"
+        >
           <form className="card space-y-6" onSubmit={handleAppointmentSubmit}>
             <div>
               <p className="label">Schedule a viewing</p>
@@ -1569,42 +1589,6 @@ function App() {
               <p className="text-sm text-ink/60">{notices.appointment}</p>
             )}
           </form>
-
-          <div className="card space-y-6">
-            <div>
-              <p className="label">Communication preferences</p>
-              <p className="text-lg font-semibold">Stay in the loop</p>
-            </div>
-            <div className="space-y-4 text-sm text-ink/70">
-              {[
-                {
-                  title: 'Email notifications',
-                  description:
-                    'New Chennai listings, price changes, and tour reminders.',
-                },
-                {
-                  title: 'SMS appointment alerts',
-                  description: 'Instant reminders and access instructions.',
-                },
-                {
-                  title: 'Weekly market briefing',
-                  description:
-                    'Chennai neighborhood trends and valuation insights.',
-                },
-              ].map((item) => (
-                <div
-                  key={item.title}
-                  className="flex items-start justify-between gap-4 rounded-2xl border border-ink/10 bg-white/70 p-4"
-                >
-                  <div>
-                    <p className="font-semibold text-ink">{item.title}</p>
-                    <p>{item.description}</p>
-                  </div>
-                  <button className="btn-outline">Enable</button>
-                </div>
-              ))}
-            </div>
-          </div>
         </section>
         <section id="dashboards" className="section space-y-10">
           <div>
@@ -1625,17 +1609,16 @@ function App() {
           )}
 
           <div className="dashboard-grid grid gap-8 lg:grid-cols-2">
-            <div className="dashboard-card card space-y-6">
+            {(isAgent || isAdmin) && (
+              <div className="dashboard-card card space-y-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="label">Agent workspace</p>
                   <p className="text-lg font-semibold">Listing management</p>
                 </div>
-                {(isAgent || isAdmin) && (
-                  <a className="btn-primary" href="#property-form">
-                    Add new property
-                  </a>
-                )}
+                <a className="btn-primary" href="#property-form">
+                  Add new property
+                </a>
               </div>
 
               {isAgent && agentProfile && (
@@ -1652,229 +1635,213 @@ function App() {
                 </p>
               )}
 
-              {!isAgent && !isAdmin && (
-                <p className="text-sm text-ink/60">
-                  Sign in as an agent to add and manage Chennai listings.
-                </p>
-              )}
-
-              {(isAgent || isAdmin) && (
-                <form
-                  id="property-form"
-                  className="space-y-3"
-                  onSubmit={handlePropertyCreate}
-                  key={propertyFormKey}
-                >
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <input
-                      className="input"
-                      name="title"
-                      placeholder="Property title"
-                      defaultValue={editingProperty?.title || ''}
-                      required
-                    />
-                    <input
-                      className="input"
-                      name="location"
-                      placeholder="Location"
-                      defaultValue={editingProperty?.location || ''}
-                      required
-                    />
-                    <input
-                      className="input"
-                      name="price"
-                      type="number"
-                      min="0"
-                      placeholder="Price (INR)"
-                      defaultValue={editingProperty?.price || ''}
-                      required
-                    />
-                    <input
-                      className="input"
-                      name="type"
-                      placeholder="Type (Apartment, Villa)"
-                      defaultValue={editingProperty?.type || ''}
-                      required
-                    />
-                    <input
-                      className="input"
-                      name="beds"
-                      type="number"
-                      min="0"
-                      placeholder="Bedrooms"
-                      defaultValue={editingProperty?.beds || ''}
-                      required
-                    />
-                    <input
-                      className="input"
-                      name="baths"
-                      type="number"
-                      min="0"
-                      placeholder="Bathrooms"
-                      defaultValue={editingProperty?.baths || ''}
-                      required
-                    />
-                    <input
-                      className="input"
-                      name="sqft"
-                      type="number"
-                      min="0"
-                      placeholder="Sq. ft."
-                      defaultValue={editingProperty?.sqft || ''}
-                      required
-                    />
-                    <select
-                      className="input"
-                      name="status"
-                      defaultValue={editingProperty?.status || 'Available'}
-                      required
-                    >
-                      <option value="Available">Available</option>
-                      <option value="Open House">Open House</option>
-                      <option value="Pending">Pending</option>
-                    </select>
-                    <input
-                      className="input sm:col-span-2"
-                      name="images"
-                      placeholder="Image URLs (comma separated)"
-                      defaultValue={
-                        editingProperty?.images?.length
-                          ? editingProperty.images.join(', ')
-                          : ''
-                      }
-                    />
-                    <input
-                      className="input sm:col-span-2"
-                      name="tags"
-                      placeholder="Tags (comma separated)"
-                      defaultValue={
-                        editingProperty?.tags?.length
-                          ? editingProperty.tags.join(', ')
-                          : ''
-                      }
-                    />
-                    <input
-                      className="input"
-                      name="lat"
-                      placeholder="Latitude"
-                      defaultValue={editingProperty?.lat || ''}
-                    />
-                    <input
-                      className="input"
-                      name="lng"
-                      placeholder="Longitude"
-                      defaultValue={editingProperty?.lng || ''}
-                    />
-                  </div>
-                  <textarea
-                    className="input min-h-[120px]"
-                    name="description"
-                    placeholder="Short description"
-                    defaultValue={editingProperty?.description || ''}
+              <form
+                id="property-form"
+                className="space-y-3"
+                onSubmit={handlePropertyCreate}
+                key={propertyFormKey}
+              >
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <input
+                    className="input"
+                    name="title"
+                    placeholder="Property title"
+                    defaultValue={editingProperty?.title || ''}
+                    required
                   />
-                  {isAdmin ? (
-                    <select
-                      className="input"
-                      name="agentId"
-                      defaultValue={
-                        editingProperty?.agentId ||
-                        editingProperty?.agent?.id ||
-                        editingProperty?.agent ||
-                        ''
-                      }
-                      required
+                  <input
+                    className="input"
+                    name="location"
+                    placeholder="Location"
+                    defaultValue={editingProperty?.location || ''}
+                    required
+                  />
+                  <input
+                    className="input"
+                    name="price"
+                    type="number"
+                    min="0"
+                    placeholder="Price (INR)"
+                    defaultValue={editingProperty?.price || ''}
+                    required
+                  />
+                  <input
+                    className="input"
+                    name="type"
+                    placeholder="Type (Apartment, Villa)"
+                    defaultValue={editingProperty?.type || ''}
+                    required
+                  />
+                  <input
+                    className="input"
+                    name="beds"
+                    type="number"
+                    min="0"
+                    placeholder="Bedrooms"
+                    defaultValue={editingProperty?.beds || ''}
+                    required
+                  />
+                  <input
+                    className="input"
+                    name="baths"
+                    type="number"
+                    min="0"
+                    placeholder="Bathrooms"
+                    defaultValue={editingProperty?.baths || ''}
+                    required
+                  />
+                  <input
+                    className="input"
+                    name="sqft"
+                    type="number"
+                    min="0"
+                    placeholder="Sq. ft."
+                    defaultValue={editingProperty?.sqft || ''}
+                    required
+                  />
+                  <select
+                    className="input"
+                    name="status"
+                    defaultValue={editingProperty?.status || 'Available'}
+                    required
+                  >
+                    <option value="Available">Available</option>
+                    <option value="Open House">Open House</option>
+                    <option value="Pending">Pending</option>
+                  </select>
+                  <input
+                    className="input sm:col-span-2"
+                    name="images"
+                    placeholder="Image URLs (comma separated)"
+                    defaultValue={
+                      editingProperty?.images?.length
+                        ? editingProperty.images.join(', ')
+                        : ''
+                    }
+                  />
+                  <input
+                    className="input sm:col-span-2"
+                    name="tags"
+                    placeholder="Tags (comma separated)"
+                    defaultValue={
+                      editingProperty?.tags?.length
+                        ? editingProperty.tags.join(', ')
+                        : ''
+                    }
+                  />
+                  <input
+                    className="input"
+                    name="lat"
+                    placeholder="Latitude"
+                    defaultValue={editingProperty?.lat || ''}
+                  />
+                  <input
+                    className="input"
+                    name="lng"
+                    placeholder="Longitude"
+                    defaultValue={editingProperty?.lng || ''}
+                  />
+                </div>
+                <textarea
+                  className="input min-h-[120px]"
+                  name="description"
+                  placeholder="Short description"
+                  defaultValue={editingProperty?.description || ''}
+                />
+                {isAdmin ? (
+                  <select
+                    className="input"
+                    name="agentId"
+                    defaultValue={
+                      editingProperty?.agentId ||
+                      editingProperty?.agent?.id ||
+                      editingProperty?.agent ||
+                      ''
+                    }
+                    required
+                  >
+                    <option value="">Assign agent</option>
+                    {agents.map((agent) => {
+                      const agentValue = agent.id || agent._id
+                      return (
+                        <option key={agentValue} value={agentValue}>
+                          {agent.name}
+                        </option>
+                      )
+                    })}
+                  </select>
+                ) : (
+                  <input
+                    type="hidden"
+                    name="agentId"
+                    defaultValue={agentProfile?.id || ''}
+                  />
+                )}
+                <div className="form-actions">
+                  <button className="btn-primary w-full" type="submit">
+                    {editingProperty ? 'Update listing' : 'Save listing'}
+                  </button>
+                  {editingProperty && (
+                    <button
+                      className="btn-outline w-full"
+                      type="button"
+                      onClick={handleCancelEdit}
                     >
-                      <option value="">Assign agent</option>
-                      {agents.map((agent) => {
-                        const agentValue = agent.id || agent._id
-                        return (
-                          <option key={agentValue} value={agentValue}>
-                            {agent.name}
-                          </option>
-                        )
-                      })}
-                    </select>
-                  ) : (
-                    <input
-                      type="hidden"
-                      name="agentId"
-                      defaultValue={agentProfile?.id || ''}
-                    />
-                  )}
-                  <div className="form-actions">
-                    <button className="btn-primary w-full" type="submit">
-                      {editingProperty ? 'Update listing' : 'Save listing'}
+                      Cancel edit
                     </button>
-                    {editingProperty && (
-                      <button
-                        className="btn-outline w-full"
-                        type="button"
-                        onClick={handleCancelEdit}
-                      >
-                        Cancel edit
-                      </button>
-                    )}
-                  </div>
-                  {propertyNotice && (
-                    <p className="text-sm text-ink/60">{propertyNotice}</p>
                   )}
-                </form>
-              )}
+                </div>
+                {propertyNotice && (
+                  <p className="text-sm text-ink/60">{propertyNotice}</p>
+                )}
+              </form>
 
               <div className="space-y-3">
-                {(isAgent ? agentProperties : properties).slice(0, 4).map(
-                  (property) => (
-                    <div
-                      key={property.id}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-ink/10 bg-white/70 p-4 text-sm"
-                    >
-                      <div>
-                        <p className="font-semibold text-ink">
-                          {property.title}
-                        </p>
-                        <p className="text-ink/60">{property.location}</p>
-                      </div>
-                      <div className="flex items-center gap-3 text-ink/60">
-                        <span>{property.status}</span>
-                        <span>{formatCurrency(property.price)}</span>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          className="btn-outline"
-                          type="button"
-                          onClick={() => handlePropertyEdit(property)}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          className="btn-outline"
-                          type="button"
-                          onClick={() => handlePropertyDelete(property.id)}
-                        >
-                          Delete
-                        </button>
-                      </div>
+                {(isAgent ? agentProperties : properties).slice(0, 4).map((property) => (
+                  <div
+                    key={property.id}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-ink/10 bg-white/70 p-4 text-sm"
+                  >
+                    <div>
+                      <p className="font-semibold text-ink">{property.title}</p>
+                      <p className="text-ink/60">{property.location}</p>
                     </div>
-                  ),
-                )}
+                    <div className="flex items-center gap-3 text-ink/60">
+                      <span>{property.status}</span>
+                      <span>{formatCurrency(property.price)}</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        className="btn-outline"
+                        type="button"
+                        onClick={() => handlePropertyEdit(property)}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="btn-outline"
+                        type="button"
+                        onClick={() => handlePropertyDelete(property.id)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
               <div className="grid gap-4 sm:grid-cols-3">
                 {[
                   {
                     label: 'New leads',
-                    value: isAuthenticated ? leadCount : '18',
+                    value: leadCount,
                   },
                   {
                     label: 'Upcoming tours',
-                    value: isAuthenticated ? tourCount : '6',
+                    value: tourCount,
                   },
                   {
                     label: 'Active listings',
-                    value: isAuthenticated
-                      ? isAgent
-                        ? agentProperties.length
-                        : properties.length
-                      : '24',
+                    value: isAgent ? agentProperties.length : properties.length,
                   },
                 ].map((metric) => (
                   <div key={metric.label} className="rounded-2xl bg-ink/5 p-4">
@@ -1887,18 +1854,15 @@ function App() {
                   </div>
                 ))}
               </div>
-            </div>
+              </div>
+            )}
 
-            <div className="dashboard-card card space-y-6">
+            {isAdmin && (
+              <div className="dashboard-card card space-y-6">
               <div>
                 <p className="label">Admin console</p>
                 <p className="text-lg font-semibold">Operations overview</p>
               </div>
-              {!isAdmin && (
-                <p className="text-sm text-ink/60">
-                  Sign in as an admin to access operational analytics.
-                </p>
-              )}
               <div className="grid gap-4 sm:grid-cols-2">
                 {[
                   {
@@ -1925,23 +1889,6 @@ function App() {
                     <p className="text-xl font-semibold text-ink">
                       {metric.value}
                     </p>
-                  </div>
-                ))}
-              </div>
-              <div className="space-y-3">
-                {[
-                  'Monthly listing performance report',
-                  'Agent activity heatmap',
-                  'Lead source attribution summary',
-                ].map((report) => (
-                  <div
-                    key={report}
-                    className="flex items-center justify-between rounded-2xl border border-ink/10 bg-white/70 px-4 py-3 text-sm"
-                  >
-                    <p className="font-semibold text-ink">{report}</p>
-                    <button className="btn-outline" type="button">
-                      Generate
-                    </button>
                   </div>
                 ))}
               </div>
@@ -2050,14 +1997,84 @@ function App() {
               <button className="btn-primary" type="button">
                 Export analytics
               </button>
-            </div>
+              </div>
+            )}
           </div>
         </section>
         <section
           id="access"
-          className="form-layout section grid gap-8 lg:grid-cols-[1.1fr_0.9fr]"
+          className="section space-y-8"
         >
-          <div className="card space-y-6">
+          <div id="client-messaging" className="card space-y-6">
+            <div>
+              <p className="label">Client messaging</p>
+              <p className="text-lg font-semibold">Connect with an agent</p>
+            </div>
+            <form className="space-y-4" onSubmit={handleMessageSubmit}>
+              <select
+                className="input"
+                name="agentId"
+                onChange={(event) =>
+                  setMessageDraft((prev) => ({
+                    ...prev,
+                    agentId: event.target.value,
+                  }))
+                }
+                required
+                value={messageDraft.agentId}
+              >
+                {agents.map((agent) => {
+                  const agentValue = agent.id || agent._id
+                  return (
+                    <option key={agentValue} value={agentValue}>
+                      {agent.name}
+                    </option>
+                  )
+                })}
+              </select>
+              <input className="input" name="name" placeholder="Your name" />
+              <input
+                className="input"
+                name="email"
+                type="email"
+                placeholder="Email (optional)"
+              />
+              <input
+                className="input"
+                name="subject"
+                onChange={(event) =>
+                  setMessageDraft((prev) => ({
+                    ...prev,
+                    subject: event.target.value,
+                  }))
+                }
+                placeholder="Subject"
+                required
+                value={messageDraft.subject}
+              />
+              <textarea
+                className="input min-h-[140px]"
+                name="message"
+                onChange={(event) =>
+                  setMessageDraft((prev) => ({
+                    ...prev,
+                    message: event.target.value,
+                  }))
+                }
+                placeholder="Write a message to the agent"
+                required
+                value={messageDraft.message}
+              />
+              <button className="btn-primary w-full" type="submit">
+                Send message
+              </button>
+              {notices.message && (
+                <p className="text-sm text-ink/60">{notices.message}</p>
+              )}
+            </form>
+          </div>
+
+          <div className="space-y-6">
             <div>
               <p className="label">User access</p>
               <p className="text-lg font-semibold">
@@ -2065,12 +2082,12 @@ function App() {
               </p>
             </div>
             {isAuthenticated && (
-              <div className="rounded-2xl border border-ink/10 bg-white/70 p-4 text-sm text-ink/60">
+              <div className="card text-sm text-ink/60">
                 Signed in as {auth.user?.name || 'Account'} ({role || 'user'}).
               </div>
             )}
-            <div className="grid gap-4 sm:grid-cols-2">
-              <form className="space-y-3" onSubmit={handleLoginSubmit}>
+            <div className="grid gap-6 md:grid-cols-2">
+              <form className="card space-y-3" onSubmit={handleLoginSubmit}>
                 <p className="text-sm font-semibold text-ink">Login</p>
                 <input
                   className="input"
@@ -2098,7 +2115,7 @@ function App() {
                   <p className="text-sm text-ink/60">{notices.login}</p>
                 )}
               </form>
-              <form className="space-y-3" onSubmit={handleRegisterSubmit}>
+              <form className="card space-y-3" onSubmit={handleRegisterSubmit}>
                 <p className="text-sm font-semibold text-ink">Register</p>
                 <input
                   className="input"
@@ -2133,50 +2150,6 @@ function App() {
                 )}
               </form>
             </div>
-          </div>
-
-          <div className="card space-y-6">
-            <div>
-              <p className="label">Client messaging</p>
-              <p className="text-lg font-semibold">Connect with an agent</p>
-            </div>
-            <form className="space-y-4" onSubmit={handleMessageSubmit}>
-              <select className="input" name="agentId" required>
-                {agents.map((agent) => {
-                  const agentValue = agent.id || agent._id
-                  return (
-                    <option key={agentValue} value={agentValue}>
-                      {agent.name}
-                    </option>
-                  )
-                })}
-              </select>
-              <input className="input" name="name" placeholder="Your name" />
-              <input
-                className="input"
-                name="email"
-                type="email"
-                placeholder="Email (optional)"
-              />
-              <input
-                className="input"
-                name="subject"
-                placeholder="Subject"
-                required
-              />
-              <textarea
-                className="input min-h-[140px]"
-                name="message"
-                placeholder="Write a message to the agent"
-                required
-              />
-              <button className="btn-primary w-full" type="submit">
-                Send message
-              </button>
-              {notices.message && (
-                <p className="text-sm text-ink/60">{notices.message}</p>
-              )}
-            </form>
           </div>
         </section>
       </main>
