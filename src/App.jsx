@@ -1623,7 +1623,7 @@ function App() {
             </div>
           )}
 
-          <div className="dashboard-grid grid gap-8 lg:grid-cols-2">
+          <div className="dashboard-grid grid items-start gap-8 lg:grid-cols-2">
             {(isAgent || isAdmin) && (
               <div className="dashboard-card card space-y-6">
               <div className="flex items-center justify-between">
@@ -2009,9 +2009,6 @@ function App() {
                   </div>
                 </div>
               )}
-              <button className="btn-primary" type="button">
-                Export analytics
-              </button>
               </div>
             )}
           </div>
