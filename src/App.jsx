@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import heroImg from './assets/hero.png'
 import './App.css'
 
@@ -338,6 +339,8 @@ const getMapSrc = (lat = defaultMapCenter.lat, lng = defaultMapCenter.lng) => {
 }
 
 function App() {
+  const location = useLocation()
+  const navigate = useNavigate()
   const [properties, setProperties] = useState(initialProperties)
   const [agents, setAgents] = useState(initialAgents)
   const [loading, setLoading] = useState(false)
@@ -354,7 +357,7 @@ function App() {
     if (!stored) return { user: null, token: '' }
     try {
       return JSON.parse(stored)
-    } catch (error) {
+    } catch (_error) {
       return { user: null, token: '' }
     }
   })
@@ -375,9 +378,6 @@ function App() {
   })
   const [compareIds, setCompareIds] = useState([])
   const [activeId, setActiveId] = useState(initialProperties[0].id)
-  const [inquiryPropertyId, setInquiryPropertyId] = useState(
-    initialProperties[0].id,
-  )
   const listingMainRef = useRef(null)
   const [messageDraft, setMessageDraft] = useState(() => ({
     agentId: initialAgents[0]?.id || initialAgents[0]?._id || '',
@@ -389,6 +389,24 @@ function App() {
   const role = auth?.user?.role
   const isAdmin = role === 'admin'
   const isAgent = role === 'agent'
+  const page = useMemo(() => {
+    if (location.pathname === '/listings' || location.pathname === '/map') {
+      return 'listings'
+    }
+    if (location.pathname === '/compare') {
+      return 'compare'
+    }
+    if (location.pathname === '/agents') {
+      return 'agents'
+    }
+    if (location.pathname === '/dashboards') {
+      return 'dashboards'
+    }
+    if (location.pathname === '/access') {
+      return 'access'
+    }
+    return 'home'
+  }, [location.pathname])
 
   const getAgent = (agentId) =>
     agents.find(
@@ -401,16 +419,19 @@ function App() {
     return []
   }
 
-  const authFetch = async (path, options = {}) => {
-    if (!auth?.token) {
-      throw new Error('Please sign in to continue.')
-    }
-    const headers = {
-      ...(options.headers || {}),
-      Authorization: `Bearer ${auth.token}`,
-    }
-    return fetch(`${API_BASE}${path}`, { ...options, headers })
-  }
+  const authFetch = useCallback(
+    async (path, options = {}) => {
+      if (!auth?.token) {
+        throw new Error('Please sign in to continue.')
+      }
+      const headers = {
+        ...(options.headers || {}),
+        Authorization: `Bearer ${auth.token}`,
+      }
+      return fetch(`${API_BASE}${path}`, { ...options, headers })
+    },
+    [auth?.token],
+  )
 
   const postJson = async (path, payload) => {
     const response = await fetch(`${API_BASE}${path}`, {
@@ -460,7 +481,7 @@ function App() {
         const nextAgents = normalizeArray(agentsJson)
         if (Array.isArray(nextProperties)) setProperties(nextProperties)
         if (Array.isArray(nextAgents)) setAgents(nextAgents)
-      } catch (error) {
+      } catch (_error) {
         if (isMounted) {
           setLoadError('Unable to reach the backend. Showing cached listings.')
         }
@@ -480,10 +501,7 @@ function App() {
     if (!properties.find((property) => property.id === activeId)) {
       setActiveId(properties[0].id)
     }
-    if (!properties.find((property) => property.id === inquiryPropertyId)) {
-      setInquiryPropertyId(properties[0].id)
-    }
-  }, [properties, activeId, inquiryPropertyId])
+  }, [properties, activeId])
 
   useEffect(() => {
     if (!agents.length) return
@@ -513,6 +531,25 @@ function App() {
       localStorage.removeItem('maithili_auth')
     }
   }, [auth])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const hashId = location.hash ? decodeURIComponent(location.hash.slice(1)) : ''
+
+    if (!hashId) {
+      window.scrollTo({ top: 0, behavior: 'auto' })
+      return
+    }
+
+    const timer = window.setTimeout(() => {
+      const target = document.getElementById(hashId)
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }
+    }, 0)
+
+    return () => window.clearTimeout(timer)
+  }, [location.hash, location.pathname])
 
   useEffect(() => {
     if (!auth?.token) {
@@ -581,21 +618,7 @@ function App() {
     return () => {
       isMounted = false
     }
-  }, [auth?.token, isAdmin, isAgent])
-
-  const handleInquirySubmit = async (event) => {
-    event.preventDefault()
-    const form = event.currentTarget
-    const formData = new FormData(event.currentTarget)
-    const payload = Object.fromEntries(formData.entries())
-    try {
-      await postJson('/api/inquiries', payload)
-      setNotice('inquiry', 'Inquiry sent. An agent will respond shortly.')
-      resetForm(form)
-    } catch (error) {
-      setNotice('inquiry', error.message)
-    }
-  }
+  }, [auth?.token, authFetch, isAdmin, isAgent])
 
   const handleAppointmentSubmit = async (event) => {
     event.preventDefault()
@@ -862,6 +885,7 @@ function App() {
   }, [filteredProperties, activeId])
 
   useEffect(() => {
+    if (page !== 'listings') return
     if (typeof window === 'undefined') return
     const listingRoot = listingMainRef.current
     if (!listingRoot) return
@@ -920,7 +944,7 @@ function App() {
       window.removeEventListener('scroll', handleViewportChange)
       window.removeEventListener('resize', handleViewportChange)
     }
-  }, [filteredProperties])
+  }, [filteredProperties, page])
 
   const compareList = properties.filter((property) =>
     compareIds.includes(property.id),
@@ -953,19 +977,6 @@ function App() {
     })
   }
 
-  const scrollToSection = (sectionId) => {
-    if (typeof document === 'undefined') return
-    const section = document.getElementById(sectionId)
-    if (section) {
-      section.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }
-  }
-
-  const handleAuthShortcut = (event, sectionId) => {
-    event.preventDefault()
-    scrollToSection(sectionId)
-  }
-
   const handleContactAgent = (property) => {
     const propertyAgentId =
       property.agentId ||
@@ -979,7 +990,6 @@ function App() {
       propertyAgent?.id || propertyAgent?._id || propertyAgentId || ''
 
     setActiveId(property.id)
-    setInquiryPropertyId(property.id)
     setNotice('message', '')
     setMessageDraft((prev) => ({
       ...prev,
@@ -989,7 +999,7 @@ function App() {
         `Hi, I am interested in ${property.title} in ${property.location}. ` +
         'Please share more details and available viewing slots.',
     }))
-    scrollToSection('client-messaging')
+    navigate('/access#client-messaging')
   }
 
   const handleMessageAgent = (agent) => {
@@ -1005,7 +1015,7 @@ function App() {
         `Hi ${agent.name}, I would like to discuss available listings in Chennai. ` +
         'Please share suitable options and next steps.',
     }))
-    scrollToSection('client-messaging')
+    navigate('/access#client-messaging')
   }
 
   return (
@@ -1015,7 +1025,7 @@ function App() {
         <div className="hero-blob hero-blob--sun pointer-events-none absolute right-0 top-0 h-[560px] w-[560px] translate-x-1/3 -translate-y-1/4 animate-float-slow rounded-full bg-[radial-gradient(circle,#d9770640_0%,transparent_65%)]" />
 
         <header className="site-header container relative z-10 mx-auto flex w-full max-w-6xl items-center justify-between px-6 pb-10 pt-8">
-          <div className="flex items-center gap-3">
+          <Link className="flex items-center gap-3" to="/">
             <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-ink text-sand">
               ME
             </div>
@@ -1027,23 +1037,46 @@ function App() {
                 Chennai luxury & lifestyle realty
               </p>
             </div>
-          </div>
+          </Link>
           <nav className="site-nav hidden items-center gap-6 text-sm font-semibold text-ink/70 md:flex">
-            <a className="hover:text-ink" href="#listings">
+            <NavLink
+              className={({ isActive }) =>
+                isActive ? 'text-ink' : 'hover:text-ink'
+              }
+              to="/listings"
+            >
               Listings
-            </a>
-            <a className="hover:text-ink" href="#map">
+            </NavLink>
+            <Link
+              className={page === 'listings' ? 'text-ink' : 'hover:text-ink'}
+              to="/listings#map"
+            >
               Map
-            </a>
-            <a className="hover:text-ink" href="#agents">
+            </Link>
+            <NavLink
+              className={({ isActive }) =>
+                isActive ? 'text-ink' : 'hover:text-ink'
+              }
+              to="/agents"
+            >
               Agents
-            </a>
-            <a className="hover:text-ink" href="#compare">
+            </NavLink>
+            <NavLink
+              className={({ isActive }) =>
+                isActive ? 'text-ink' : 'hover:text-ink'
+              }
+              to="/compare"
+            >
               Compare
-            </a>
-            <a className="hover:text-ink" href="#dashboards">
+            </NavLink>
+            <NavLink
+              className={({ isActive }) =>
+                isActive ? 'text-ink' : 'hover:text-ink'
+              }
+              to="/dashboards"
+            >
               Dashboards
-            </a>
+            </NavLink>
           </nav>
           <div className="header-actions flex items-center gap-2">
             {isAuthenticated ? (
@@ -1057,22 +1090,12 @@ function App() {
               </>
             ) : (
               <>
-                <a
-                  className="btn-ghost"
-                  href="#access-login"
-                  onClick={(event) => handleAuthShortcut(event, 'access-login')}
-                >
+                <Link className="btn-ghost" to="/access#access-login">
                   Sign in
-                </a>
-                <a
-                  className="btn-primary"
-                  href="#access-register"
-                  onClick={(event) =>
-                    handleAuthShortcut(event, 'access-register')
-                  }
-                >
+                </Link>
+                <Link className="btn-primary" to="/access#access-register">
                   Create account
-                </a>
+                </Link>
               </>
             )}
           </div>
@@ -1118,7 +1141,42 @@ function App() {
             </p>
           </div>
         )}
-        <section id="listings" className="section space-y-10">
+        {page === 'home' && (
+          <section className="section space-y-10">
+            <div className="card space-y-6">
+              <p className="label">Platform sections</p>
+              <p className="section-title">
+                Open each workflow as a dedicated page.
+              </p>
+              <p className="section-sub">
+                All previous features are preserved. Use the links below to
+                access listings, comparison, agent profiles, role-based
+                dashboards, and user access forms without long scrolling.
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <Link className="btn-primary" to="/listings">
+                  Listings & inquiries
+                </Link>
+                <Link className="btn-outline" to="/compare">
+                  Compare properties
+                </Link>
+                <Link className="btn-outline" to="/agents">
+                  Agents
+                </Link>
+                <Link className="btn-outline" to="/dashboards">
+                  Dashboards
+                </Link>
+                <Link className="btn-outline" to="/access">
+                  Login / Register
+                </Link>
+              </div>
+            </div>
+          </section>
+        )}
+        <section
+          id="listings"
+          className={`section space-y-10 ${page === 'listings' ? '' : 'hidden'}`}
+        >
           <div className="flex flex-wrap items-end justify-between gap-6">
             <div>
               <h2 className="section-title">Property listings</h2>
@@ -1344,60 +1402,13 @@ function App() {
                 </div>
               </div>
 
-              <div className="inquiry-card card space-y-4">
-                <div>
-                  <p className="label">Property inquiry</p>
-                  <p className="text-lg font-semibold">Request information</p>
-                </div>
-                <form className="space-y-3" onSubmit={handleInquirySubmit}>
-                  <select
-                    className="input"
-                    name="propertyId"
-                    value={inquiryPropertyId}
-                    onChange={(event) => setInquiryPropertyId(event.target.value)}
-                  >
-                    {properties.map((property) => (
-                      <option key={property.id} value={property.id}>
-                        {property.title}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    className="input"
-                    name="name"
-                    placeholder="Your full name"
-                    required
-                  />
-                  <input
-                    className="input"
-                    name="email"
-                    type="email"
-                    placeholder="Email address"
-                    required
-                  />
-                  <input
-                    className="input"
-                    name="phone"
-                    placeholder="Phone (optional)"
-                  />
-                  <textarea
-                    className="input min-h-[120px]"
-                    name="message"
-                    placeholder="Tell us what you are looking for"
-                    required
-                  />
-                  <button className="btn-primary w-full" type="submit">
-                    Send inquiry
-                  </button>
-                </form>
-                {notices.inquiry && (
-                  <p className="text-sm text-ink/60">{notices.inquiry}</p>
-                )}
-              </div>
             </aside>
           </div>
         </section>
-        <section id="compare" className="section space-y-10">
+        <section
+          id="compare"
+          className={`section space-y-10 ${page === 'compare' ? '' : 'hidden'}`}
+        >
           <div className="flex flex-wrap items-end justify-between gap-6">
             <div>
               <h2 className="section-title">Property comparison</h2>
@@ -1500,7 +1511,10 @@ function App() {
             </div>
           </div>
         </section>
-        <section id="agents" className="section space-y-10">
+        <section
+          id="agents"
+          className={`section space-y-10 ${page === 'agents' ? '' : 'hidden'}`}
+        >
           <div>
             <h2 className="section-title">Meet the agents</h2>
             <p className="section-sub">
@@ -1597,7 +1611,10 @@ function App() {
             )}
           </form>
         </section>
-        <section id="dashboards" className="section space-y-10">
+        <section
+          id="dashboards"
+          className={`section space-y-10 ${page === 'dashboards' ? '' : 'hidden'}`}
+        >
           <div>
             <h2 className="section-title">Agent & admin dashboards</h2>
             <p className="section-sub">
@@ -2007,7 +2024,7 @@ function App() {
         </section>
         <section
           id="access"
-          className="section space-y-8"
+          className={`section space-y-8 ${page === 'access' ? '' : 'hidden'}`}
         >
           <div id="client-messaging" className="card space-y-6">
             <div>
@@ -2172,18 +2189,18 @@ function App() {
             <p>Curated real estate experiences across Chennai.</p>
           </div>
           <div className="flex flex-wrap gap-4">
-            <a className="hover:text-ink" href="#listings">
+            <Link className="hover:text-ink" to="/listings">
               Listings
-            </a>
-            <a className="hover:text-ink" href="#agents">
+            </Link>
+            <Link className="hover:text-ink" to="/agents">
               Agents
-            </a>
-            <a className="hover:text-ink" href="#compare">
+            </Link>
+            <Link className="hover:text-ink" to="/compare">
               Compare
-            </a>
-            <a className="hover:text-ink" href="#dashboards">
+            </Link>
+            <Link className="hover:text-ink" to="/dashboards">
               Dashboards
-            </a>
+            </Link>
           </div>
         </div>
       </footer>
@@ -2192,3 +2209,6 @@ function App() {
 }
 
 export default App
+
+
+

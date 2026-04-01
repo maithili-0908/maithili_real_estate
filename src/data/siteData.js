@@ -1,0 +1,193 @@
+export const fallbackProperties = [
+  {
+    id: 'p1',
+    title: 'ECR Seabreeze Villa',
+    location: 'East Coast Road, Chennai',
+    price: 24500000,
+    type: 'Villa',
+    beds: 4,
+    baths: 3,
+    sqft: 3200,
+    status: 'Available',
+    images: [
+      'https://images.unsplash.com/photo-1505691938895-1758d7feb511?auto=format&fit=crop&w=1200&q=80',
+    ],
+    description:
+      'Modern villa with sea-breeze balconies, open-plan living, and a private garden.',
+    agentId: 'a1',
+  },
+  {
+    id: 'p2',
+    title: 'Adyar Riverside Apartment',
+    location: 'Adyar, Chennai',
+    price: 13500000,
+    type: 'Apartment',
+    beds: 3,
+    baths: 2,
+    sqft: 1650,
+    status: 'Open House',
+    images: [
+      'https://images.unsplash.com/photo-1502672023488-70e25813eb80?auto=format&fit=crop&w=1200&q=80',
+    ],
+    description:
+      'High-floor apartment with river views and quick access to schools and retail.',
+    agentId: 'a2',
+  },
+  {
+    id: 'p3',
+    title: 'Nungambakkam Heritage Home',
+    location: 'Nungambakkam, Chennai',
+    price: 21500000,
+    type: 'Independent House',
+    beds: 4,
+    baths: 4,
+    sqft: 2800,
+    status: 'Available',
+    images: [
+      'https://images.unsplash.com/photo-1484154218962-a197022b5858?auto=format&fit=crop&w=1200&q=80',
+    ],
+    description:
+      'Renovated heritage home with warm interiors and a landscaped courtyard.',
+    agentId: 'a3',
+  },
+  {
+    id: 'p4',
+    title: 'OMR Skydeck Penthouse',
+    location: 'OMR, Chennai',
+    price: 32000000,
+    type: 'Penthouse',
+    beds: 4,
+    baths: 4,
+    sqft: 3400,
+    status: 'Available',
+    images: [
+      'https://images.unsplash.com/photo-1502005229762-cf1b2da7c5d6?auto=format&fit=crop&w=1200&q=80',
+    ],
+    description:
+      'Signature penthouse with private sky deck, concierge desk, and city views.',
+    agentId: 'a1',
+  },
+  {
+    id: 'p5',
+    title: 'Anna Nagar Garden Townhome',
+    location: 'Anna Nagar, Chennai',
+    price: 15500000,
+    type: 'Townhome',
+    beds: 3,
+    baths: 3,
+    sqft: 2100,
+    status: 'Pending',
+    images: [
+      'https://images.unsplash.com/photo-1449844908441-8829872d2607?auto=format&fit=crop&w=1200&q=80',
+    ],
+    description:
+      'Family-focused townhome with EV-ready parking and park-facing frontage.',
+    agentId: 'a4',
+  },
+  {
+    id: 'p6',
+    title: 'Velachery Smart Loft',
+    location: 'Velachery, Chennai',
+    price: 9800000,
+    type: 'Loft',
+    beds: 2,
+    baths: 2,
+    sqft: 1400,
+    status: 'Available',
+    images: [
+      'https://images.unsplash.com/photo-1507089947368-19c1da9775ae?auto=format&fit=crop&w=1200&q=80',
+    ],
+    description:
+      'Tech-forward loft with smart controls, coworking lounge, and metro access.',
+    agentId: 'a2',
+  },
+  {
+    id: 'p7',
+    title: 'Mylapore Courtyard Home',
+    location: 'Mylapore, Chennai',
+    price: 22500000,
+    type: 'Independent House',
+    beds: 4,
+    baths: 4,
+    sqft: 3000,
+    status: 'Available',
+    images: [
+      'https://images.unsplash.com/photo-1505691723518-36a5ac3be353?auto=format&fit=crop&w=1200&q=80',
+    ],
+    description:
+      'Classic home with a central courtyard and quiet residential street setting.',
+    agentId: 'a3',
+  },
+  {
+    id: 'p8',
+    title: 'Tambaram Garden Duplex',
+    location: 'Tambaram, Chennai',
+    price: 9500000,
+    type: 'Duplex',
+    beds: 3,
+    baths: 3,
+    sqft: 2000,
+    status: 'Available',
+    images: [
+      'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&w=1200&q=80',
+    ],
+    description:
+      'Bright duplex in a green suburb with rooftop solar and school-zone access.',
+    agentId: 'a4',
+  },
+]
+
+export const fallbackAgents = [
+  {
+    id: 'a1',
+    name: 'Meera Iyer',
+    role: 'Luxury Advisor',
+    phone: '+91 98410 22184',
+    email: 'meera@maithiliestates.in',
+    rating: 4.9,
+    transactions: 86,
+    avatar:
+      'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=600&q=80',
+    bio: 'Specializes in premium ECR listings with private tour planning and negotiation support.',
+    areas: ['ECR', 'OMR', 'Adyar'],
+  },
+  {
+    id: 'a2',
+    name: 'Arjun Raman',
+    role: 'Investment Specialist',
+    phone: '+91 97910 60310',
+    email: 'arjun@maithiliestates.in',
+    rating: 4.8,
+    transactions: 112,
+    avatar:
+      'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=600&q=80',
+    bio: 'Focuses on transit-connected investments and rental yield opportunities.',
+    areas: ['Velachery', 'Sholinganallur', 'OMR'],
+  },
+  {
+    id: 'a3',
+    name: 'Kavya Menon',
+    role: 'Family Home Strategist',
+    phone: '+91 98405 91200',
+    email: 'kavya@maithiliestates.in',
+    rating: 5,
+    transactions: 74,
+    avatar:
+      'https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&w=600&q=80',
+    bio: 'Helps families select school-first neighborhoods with long-term value.',
+    areas: ['Nungambakkam', 'Mylapore', 'Alwarpet'],
+  },
+  {
+    id: 'a4',
+    name: 'Vikram Rao',
+    role: 'Neighborhood Curator',
+    phone: '+91 98407 33770',
+    email: 'vikram@maithiliestates.in',
+    rating: 4.7,
+    transactions: 59,
+    avatar:
+      'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=600&q=80',
+    bio: 'Curates homes in North and West Chennai with practical move-in guidance.',
+    areas: ['Anna Nagar', 'Porur', 'Tambaram'],
+  },
+]

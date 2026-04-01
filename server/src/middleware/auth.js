@@ -11,7 +11,7 @@ export const requireAuth = (req, res, next) => {
     const payload = jwt.verify(token, process.env.JWT_SECRET)
     req.user = payload
     return next()
-  } catch (error) {
+  } catch (_error) {
     return res.status(401).json({ error: 'Invalid token' })
   }
 }

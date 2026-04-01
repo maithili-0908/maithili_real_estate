@@ -42,7 +42,7 @@ const seed = async () => {
       phone: seedAgent.phone,
     })
 
-    const { key, ...agentPayload } = seedAgent
+    const { key: _key, ...agentPayload } = seedAgent
     const agent = await Agent.create({
       ...agentPayload,
       user: user.id,
