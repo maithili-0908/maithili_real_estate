@@ -377,6 +377,7 @@ function App() {
     sort: 'recommended',
   })
   const [compareIds, setCompareIds] = useState([])
+  const [compareRedirectPromptOpen, setCompareRedirectPromptOpen] = useState(false)
   const [activeId, setActiveId] = useState(initialProperties[0].id)
   const listingMainRef = useRef(null)
   const [messageDraft, setMessageDraft] = useState(() => ({
@@ -970,12 +971,50 @@ function App() {
   const mapSrc = getMapSrc(mapLat, mapLng)
 
   const toggleCompare = (id) => {
-    setCompareIds((prev) => {
-      if (prev.includes(id)) return prev.filter((item) => item !== id)
-      if (prev.length >= 3) return prev
-      return [...prev, id]
-    })
+    const isSelected = compareIds.includes(id)
+    let nextCompareIds = compareIds
+
+    if (isSelected) {
+      nextCompareIds = compareIds.filter((item) => item !== id)
+    } else if (compareIds.length < 3) {
+      nextCompareIds = [...compareIds, id]
+    }
+
+    setCompareIds(nextCompareIds)
+
+    const wasAdded = !isSelected && nextCompareIds.length > compareIds.length
+    if (wasAdded && nextCompareIds.length === 2 && page !== 'compare') {
+      setCompareRedirectPromptOpen(true)
+    }
   }
+
+  const handleCompareRedirectClose = () => {
+    setCompareRedirectPromptOpen(false)
+  }
+
+  const handleCompareRedirectConfirm = () => {
+    setCompareRedirectPromptOpen(false)
+    navigate('/compare')
+  }
+
+  useEffect(() => {
+    if (!compareRedirectPromptOpen) return undefined
+
+    const previousBodyOverflow = document.body.style.overflow
+    const handleEscapeClose = (event) => {
+      if (event.key === 'Escape') {
+        setCompareRedirectPromptOpen(false)
+      }
+    }
+
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', handleEscapeClose)
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow
+      window.removeEventListener('keydown', handleEscapeClose)
+    }
+  }, [compareRedirectPromptOpen])
 
   const handleContactAgent = (property) => {
     const propertyAgentId =
@@ -999,7 +1038,7 @@ function App() {
         `Hi, I am interested in ${property.title} in ${property.location}. ` +
         'Please share more details and available viewing slots.',
     }))
-    navigate('/access#client-messaging')
+    navigate('/agents#client-messaging')
   }
 
   const handleMessageAgent = (agent) => {
@@ -1015,7 +1054,7 @@ function App() {
         `Hi ${agent.name}, I would like to discuss available listings in Chennai. ` +
         'Please share suitable options and next steps.',
     }))
-    navigate('/access#client-messaging')
+    navigate('/agents#client-messaging')
   }
 
   return (
@@ -1047,12 +1086,6 @@ function App() {
             >
               Listings
             </NavLink>
-            <Link
-              className={page === 'listings' ? 'text-ink' : 'hover:text-ink'}
-              to="/listings#map"
-            >
-              Map
-            </Link>
             <NavLink
               className={({ isActive }) =>
                 isActive ? 'text-ink' : 'hover:text-ink'
@@ -1552,10 +1585,78 @@ function App() {
               </div>
             ))}
           </div>
+          <div id="client-messaging" className="card space-y-6">
+            <div>
+              <p className="label">Client messaging</p>
+              <p className="text-lg font-semibold">Connect with an agent</p>
+            </div>
+            <form className="space-y-4" onSubmit={handleMessageSubmit}>
+              <select
+                className="input"
+                name="agentId"
+                onChange={(event) =>
+                  setMessageDraft((prev) => ({
+                    ...prev,
+                    agentId: event.target.value,
+                  }))
+                }
+                required
+                value={messageDraft.agentId}
+              >
+                {agents.map((agent) => {
+                  const agentValue = agent.id || agent._id
+                  return (
+                    <option key={agentValue} value={agentValue}>
+                      {agent.name}
+                    </option>
+                  )
+                })}
+              </select>
+              <input className="input" name="name" placeholder="Your name" />
+              <input
+                className="input"
+                name="email"
+                type="email"
+                placeholder="Email (optional)"
+              />
+              <input
+                className="input"
+                name="subject"
+                onChange={(event) =>
+                  setMessageDraft((prev) => ({
+                    ...prev,
+                    subject: event.target.value,
+                  }))
+                }
+                placeholder="Subject"
+                required
+                value={messageDraft.subject}
+              />
+              <textarea
+                className="input min-h-[140px]"
+                name="message"
+                onChange={(event) =>
+                  setMessageDraft((prev) => ({
+                    ...prev,
+                    message: event.target.value,
+                  }))
+                }
+                placeholder="Write a message to the agent"
+                required
+                value={messageDraft.message}
+              />
+              <button className="btn-primary w-full" type="submit">
+                Send message
+              </button>
+              {notices.message && (
+                <p className="text-sm text-ink/60">{notices.message}</p>
+              )}
+            </form>
+          </div>
         </section>
         <section
           id="contact"
-          className="section"
+          className={`section ${page === 'agents' ? '' : 'hidden'}`}
         >
           <form className="card space-y-6" onSubmit={handleAppointmentSubmit}>
             <div>
@@ -2026,75 +2127,6 @@ function App() {
           id="access"
           className={`section space-y-8 ${page === 'access' ? '' : 'hidden'}`}
         >
-          <div id="client-messaging" className="card space-y-6">
-            <div>
-              <p className="label">Client messaging</p>
-              <p className="text-lg font-semibold">Connect with an agent</p>
-            </div>
-            <form className="space-y-4" onSubmit={handleMessageSubmit}>
-              <select
-                className="input"
-                name="agentId"
-                onChange={(event) =>
-                  setMessageDraft((prev) => ({
-                    ...prev,
-                    agentId: event.target.value,
-                  }))
-                }
-                required
-                value={messageDraft.agentId}
-              >
-                {agents.map((agent) => {
-                  const agentValue = agent.id || agent._id
-                  return (
-                    <option key={agentValue} value={agentValue}>
-                      {agent.name}
-                    </option>
-                  )
-                })}
-              </select>
-              <input className="input" name="name" placeholder="Your name" />
-              <input
-                className="input"
-                name="email"
-                type="email"
-                placeholder="Email (optional)"
-              />
-              <input
-                className="input"
-                name="subject"
-                onChange={(event) =>
-                  setMessageDraft((prev) => ({
-                    ...prev,
-                    subject: event.target.value,
-                  }))
-                }
-                placeholder="Subject"
-                required
-                value={messageDraft.subject}
-              />
-              <textarea
-                className="input min-h-[140px]"
-                name="message"
-                onChange={(event) =>
-                  setMessageDraft((prev) => ({
-                    ...prev,
-                    message: event.target.value,
-                  }))
-                }
-                placeholder="Write a message to the agent"
-                required
-                value={messageDraft.message}
-              />
-              <button className="btn-primary w-full" type="submit">
-                Send message
-              </button>
-              {notices.message && (
-                <p className="text-sm text-ink/60">{notices.message}</p>
-              )}
-            </form>
-          </div>
-
           <div className="space-y-6">
             <div>
               <p className="label">User access</p>
@@ -2182,6 +2214,59 @@ function App() {
           </div>
         </section>
       </main>
+      {compareRedirectPromptOpen && (
+        <div
+          className="compare-redirect-overlay"
+          onClick={handleCompareRedirectClose}
+        >
+          <div
+            aria-describedby="compare-redirect-description"
+            aria-labelledby="compare-redirect-title"
+            aria-modal="true"
+            className="compare-redirect-modal"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+          >
+            <div className="compare-redirect-top">
+              <span aria-hidden="true" className="compare-redirect-icon">
+                ↔
+              </span>
+              <button
+                aria-label="Close compare popup"
+                className="compare-redirect-close"
+                onClick={handleCompareRedirectClose}
+                type="button"
+              >
+                ×
+              </button>
+            </div>
+            <p className="label">Comparison ready</p>
+            <h3 className="compare-redirect-title" id="compare-redirect-title">
+              Open the Compare tab now?
+            </h3>
+            <p className="compare-redirect-description" id="compare-redirect-description">
+              You selected multiple properties. Switch to Compare to review them
+              side by side.
+            </p>
+            <div className="compare-redirect-actions">
+              <button
+                className="btn-outline"
+                onClick={handleCompareRedirectClose}
+                type="button"
+              >
+                Stay on Listings
+              </button>
+              <button
+                className="compare-redirect-confirm"
+                onClick={handleCompareRedirectConfirm}
+                type="button"
+              >
+                Go to Compare
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <footer className="site-footer border-t border-ink/10 bg-white/70">
         <div className="footer-inner container mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-6 px-6 py-8 text-sm text-ink/60">
           <div>
