@@ -409,6 +409,12 @@ function App() {
     return 'home'
   }, [location.pathname])
 
+  useEffect(() => {
+    if (location.pathname === '/') {
+      navigate('/listings', { replace: true })
+    }
+  }, [location.pathname, navigate])
+
   const getAgent = (agentId) =>
     agents.find(
       (agent) => agent.id === agentId || agent._id === agentId,
